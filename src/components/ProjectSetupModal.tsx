@@ -1,0 +1,219 @@
+'use client'
+
+import { useState } from 'react'
+import { X, RefreshCw, Plus } from 'lucide-react'
+
+interface ProjectSetupModalProps {
+  file: File
+  onClose: () => void
+  onContinue: (data: any) => void
+}
+
+export default function ProjectSetupModal({ file, onClose, onContinue }: ProjectSetupModalProps) {
+  const [projectName, setProjectName] = useState(generateProjectName())
+  const [activeTab, setActiveTab] = useState<'scratch' | 'existing'>('scratch')
+  const [columnNames, setColumnNames] = useState<string[]>([])
+  const [context, setContext] = useState('')
+  const [sheetLink, setSheetLink] = useState('')
+  const [newColumn, setNewColumn] = useState('')
+
+  function generateProjectName() {
+    const adjectives = ['Smart', 'Quick', 'Advanced', 'Modern', 'Dynamic', 'Efficient']
+    const nouns = ['Analysis', 'Report', 'Document', 'Data', 'Processing', 'Extract']
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)]
+    const noun = nouns[Math.floor(Math.random() * nouns.length)]
+    return `${adj} ${noun} ${new Date().getFullYear()}`
+  }
+
+  const addColumn = () => {
+    if (newColumn.trim() && !columnNames.includes(newColumn.trim())) {
+      setColumnNames([...columnNames, newColumn.trim()])
+      setNewColumn('')
+    }
+  }
+
+  const removeColumn = (column: string) => {
+    setColumnNames(columnNames.filter(c => c !== column))
+  }
+
+  const handleContinue = () => {
+    const data = {
+      name: projectName,
+      file: file.name,
+      type: activeTab,
+      ...(activeTab === 'scratch' ? {
+        columnNames,
+        context
+      } : {
+        sheetLink,
+        context
+      })
+    }
+    onContinue(data)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Set up your project</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Project Name */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Project Name
+          </label>
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button
+              onClick={() => setProjectName(generateProjectName())}
+              className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
+              title="Generate new name"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-6">
+          <div className="flex border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('scratch')}
+              className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+                activeTab === 'scratch'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Create from scratch
+            </button>
+            <button
+              onClick={() => setActiveTab('existing')}
+              className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+                activeTab === 'existing'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Link existing project
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'scratch' ? (
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Column Names (Optional)
+              </label>
+              <div className="flex items-center space-x-2 mb-2">
+                <input
+                  type="text"
+                  value={newColumn}
+                  onChange={(e) => setNewColumn(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addColumn()}
+                  placeholder="Enter column name"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  onClick={addColumn}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {columnNames.map((column) => (
+                  <span
+                    key={column}
+                    className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center space-x-1"
+                  >
+                    <span>{column}</span>
+                    <button
+                      onClick={() => removeColumn(column)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Leave empty and AI will decide the columns automatically
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Optional Context for AI
+              </label>
+              <textarea
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                placeholder="Provide additional context to help AI understand your document better..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Google Sheets Link
+              </label>
+              <input
+                type="url"
+                value={sheetLink}
+                onChange={(e) => setSheetLink(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Optional Context for AI
+              </label>
+              <textarea
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                placeholder="Provide additional context to help AI understand your document better..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-end space-x-4 mt-8">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleContinue}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
