@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Loader2 } from 'lucide-react'
+import { useAuth } from '@clerk/nextjs'
+import { toast } from 'react-hot-toast'
 import ProjectSetupModal from './ProjectSetupModal'
 
 interface FileUploadProps {
@@ -12,8 +14,10 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [showSetupModal, setShowSetupModal] = useState(false)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('')
+  const [uploadedFileName, setUploadedFileName] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { isSignedIn } = useAuth()
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -43,17 +47,39 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
   }
 
   const handleFileUpload = async (file: File) => {
+    if (!isSignedIn) {
+      toast.error('Please sign in to upload files')
+      return
+    }
+
     setIsUploading(true)
-    setUploadedFile(file)
     
-    // Simulate upload
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    setIsUploading(false)
-    setShowSetupModal(true)
-    
-    if (onFileSelect) {
-      onFileSelect(file)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/upload-file', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Upload failed')
+      }
+
+      const data = await response.json()
+      setUploadedFileUrl(data.url)
+      setUploadedFileName(data.filename)
+      setShowSetupModal(true)
+      
+      if (onFileSelect) {
+        onFileSelect(file)
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast.error('Upload failed, please try again.')
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -102,7 +128,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
           type="file"
           onChange={handleFileInput}
           className="hidden"
-          accept="image/*,.pdf,.zip,.doc,.docx"
+          accept="image/*,.pdf,.zip,.doc,.docx,audio/*"
         />
         
         <div className="text-center">
@@ -121,15 +147,14 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
       </div>
 
       {/* Project Setup Modal */}
-      {showSetupModal && uploadedFile && (
+      {showSetupModal && uploadedFileUrl && (
         <ProjectSetupModal
-          file={uploadedFile}
+          fileUrl={uploadedFileUrl}
+          fileName={uploadedFileName}
           onClose={() => setShowSetupModal(false)}
           onContinue={(projectData) => {
-            console.log('Project setup:', projectData)
             setShowSetupModal(false)
-            // Navigate to processed page
-            window.location.href = `/processed/${Date.now()}`
+            // Navigation will be handled by the modal
           }}
         />
       )}

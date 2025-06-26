@@ -1,69 +1,175 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Image from 'next/image'
-import { CheckCircle, FileText, Headphones, Undo2, Redo2, Download, ChevronDown, X, Mail, Save } from 'lucide-react'
+import { CheckCircle, FileText, Headphones, Undo2, Redo2, Download, ChevronDown, X, Mail, Save, Upload, Loader2 } from 'lucide-react'
+import { useAuth } from '@clerk/nextjs'
+import { toast } from 'react-hot-toast'
 import Navigation from '@/components/Navigation'
+
+interface Project {
+  id: string
+  name: string
+  fileUrls: string[]
+  status: string
+  dataPoints: number
+  createdAt: string
+  updatedAt: string
+  connectedSheet?: {
+    sheetUrl: string
+    lastSync: string
+  }
+  currentVersion: number
+}
 
 export default function ProcessedPage() {
   const params = useParams()
+  const { isSignedIn, isLoaded } = useAuth()
+  const [project, setProject] = useState<Project | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [showTextModal, setShowTextModal] = useState(false)
   const [showAudioModal, setShowAudioModal] = useState(false)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [textAnalysis, setTextAnalysis] = useState('')
+  const [audioUrl, setAudioUrl] = useState('')
   const [isLoadingText, setIsLoadingText] = useState(false)
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn && params.id) {
+      fetchProject()
+    } else if (isLoaded) {
+      setIsLoading(false)
+    }
+  }, [isSignedIn, isLoaded, params.id])
+
+  const fetchProject = async () => {
+    try {
+      const response = await fetch(`/api/project/${params.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setProject(data)
+      } else if (response.status === 404) {
+        toast.error('Project not found')
+      }
+    } catch (error) {
+      console.error('Failed to fetch project:', error)
+      toast.error('Failed to load project')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleTextAnalysis = async () => {
     setShowTextModal(true)
     setIsLoadingText(true)
     
-    // Simulate loading
-    await new Promise(resolve => setTimeout(resolve, 3000))
-    
-    setTextAnalysis(`# Document Analysis Report
+    try {
+      const response = await fetch('/api/generate-text-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: params.id })
+      })
 
-## Document Overview
-This appears to be a financial invoice document with the following key characteristics:
-
-### Extracted Information
-- **Document Type**: Invoice
-- **Invoice Number**: INV-2024-001
-- **Date**: March 15, 2024
-- **Total Amount**: $2,450.00
-- **Vendor**: TechCorp Solutions
-- **Client**: DataFlow Systems
-
-### Key Data Points
-- **Line items**: 5 products/services identified
-- **Tax amount**: $245.00 (10%)
-- **Payment terms**: Net 30 days
-- **Currency**: USD
-
-### Data Quality Score
-- **Completeness**: 95%
-- **Confidence**: 92%
-- **Accuracy**: 98%
-
-### Recommendations
-1. All critical financial data successfully extracted
-2. Consider automating similar invoice processing
-3. Setup recurring processing for this vendor type
-
-This document has been successfully processed and is ready for integration into your financial management system.`)
-    
-    setIsLoadingText(false)
+      if (response.ok) {
+        const data = await response.json()
+        setTextAnalysis(data.analysis)
+      } else {
+        throw new Error('Failed to generate analysis')
+      }
+    } catch (error) {
+      console.error('Text analysis error:', error)
+      toast.error('Failed to generate text analysis')
+    } finally {
+      setIsLoadingText(false)
+    }
   }
 
   const handleAudioAnalysis = async () => {
     setShowAudioModal(true)
     setIsLoadingAudio(true)
     
-    // Simulate loading
-    await new Promise(resolve => setTimeout(resolve, 2500))
+    try {
+      const response = await fetch('/api/generate-audio-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: params.id })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setAudioUrl(data.audioUrl)
+      } else {
+        throw new Error('Failed to generate audio analysis')
+      }
+    } catch (error) {
+      console.error('Audio analysis error:', error)
+      toast.error('Failed to generate audio analysis')
+    } finally {
+      setIsLoadingAudio(false)
+    }
+  }
+
+  const handleDownload = (format: string) => {
+    window.open(`/api/download/${params.id}/${format}`, '_blank')
+    setShowDownloadMenu(false)
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
     
-    setIsLoadingAudio(false)
+    if (diffInMinutes < 1) return 'Just now'
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`
+    return `${Math.floor(diffInMinutes / 1440)} days ago`
+  }
+
+  if (!isLoaded || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-4xl mx-auto px-6 py-20 text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-6">
+            Sign in to view this project
+          </h1>
+          <p className="text-lg text-gray-600">
+            You need to be signed in to access project details.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-4xl mx-auto px-6 py-20 text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-6">
+            Project not found
+          </h1>
+          <p className="text-lg text-gray-600">
+            The project you're looking for doesn't exist or you don't have access to it.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -75,7 +181,9 @@ This document has been successfully processed and is ready for integration into 
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-2">
             <CheckCircle className="w-6 h-6 text-green-600" />
-            <span className="text-lg font-medium text-gray-800">Synced with Google Sheets</span>
+            <span className="text-lg font-medium text-gray-800">
+              {project.connectedSheet ? 'Synced with Google Sheets' : 'Processing Complete'}
+            </span>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -98,14 +206,23 @@ This document has been successfully processed and is ready for integration into 
               
               {showDownloadMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-                  <button className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                    <span>CSV</span>
+                  <button 
+                    onClick={() => handleDownload('csv')}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                  >
+                    CSV
                   </button>
-                  <button className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                    <span>JSON</span>
+                  <button 
+                    onClick={() => handleDownload('json')}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                  >
+                    JSON
                   </button>
-                  <button className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                    <span>XLS</span>
+                  <button 
+                    onClick={() => handleDownload('xls')}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                  >
+                    XLS
                   </button>
                 </div>
               )}
@@ -118,13 +235,19 @@ This document has been successfully processed and is ready for integration into 
           {/* Document Preview */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="aspect-video bg-gray-100">
-              <Image
-                src="https://images.pexels.com/photos/8849295/pexels-photo-8849295.jpeg?auto=compress&cs=tinysrgb&w=800&h=450"
-                alt="Processed document"
-                width={800}
-                height={450}
-                className="w-full h-full object-cover"
-              />
+              {project.fileUrls[project.fileUrls.length - 1] ? (
+                <Image
+                  src={project.fileUrls[project.fileUrls.length - 1]}
+                  alt="Processed document"
+                  width={800}
+                  height={450}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                  <FileText className="w-16 h-16" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -149,29 +272,34 @@ This document has been successfully processed and is ready for integration into 
                   <Headphones className="w-5 h-5" />
                   <span>Generate Audio Analysis</span>
                 </button>
+
+                <button className="w-full bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition-colors font-medium inline-flex items-center justify-center space-x-3">
+                  <Upload className="w-5 h-5" />
+                  <span>Upload Additional Files</span>
+                </button>
               </div>
             </div>
 
             {/* Document Info */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">Document Details</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Project Details</h3>
               
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">File Name:</span>
-                  <span className="font-medium">invoice_march_2024.pdf</span>
+                  <span className="text-gray-600">Project Name:</span>
+                  <span className="font-medium">{project.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Processed:</span>
-                  <span className="font-medium">2 minutes ago</span>
+                  <span className="font-medium">{formatTimeAgo(project.updatedAt)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Status:</span>
-                  <span className="text-green-600 font-medium">Complete</span>
+                  <span className="text-green-600 font-medium capitalize">{project.status.toLowerCase()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Data Points:</span>
-                  <span className="font-medium">47 extracted</span>
+                  <span className="font-medium">{project.dataPoints} extracted</span>
                 </div>
               </div>
             </div>
@@ -206,7 +334,7 @@ This document has been successfully processed and is ready for integration into 
               </div>
             )}
 
-            {!isLoadingText && (
+            {!isLoadingText && textAnalysis && (
               <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
                 <button className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors inline-flex items-center space-x-2">
                   <Mail className="w-4 h-4" />
@@ -253,8 +381,7 @@ This document has been successfully processed and is ready for integration into 
                   </div>
                   
                   <div className="mt-6">
-                    <audio controls className="w-full">
-                      <source src="https://www.soundjay.com/misc/sounds/bell-ringing-05.wav" type="audio/wav" />
+                    <audio controls className="w-full" src={audioUrl}>
                       Your browser does not support the audio element.
                     </audio>
                   </div>
@@ -279,7 +406,7 @@ This document has been successfully processed and is ready for integration into 
               </div>
             )}
 
-            {!isLoadingAudio && (
+            {!isLoadingAudio && audioUrl && (
               <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
                 <button className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors inline-flex items-center space-x-2">
                   <Mail className="w-4 h-4" />

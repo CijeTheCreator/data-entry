@@ -1,52 +1,72 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Plus } from 'lucide-react'
+import { Plus, Loader2 } from 'lucide-react'
+import { useAuth } from '@clerk/nextjs'
 import Navigation from '@/components/Navigation'
 
-export default function ProjectsPage() {
-  const [isSignedIn] = useState(true) // Simulate sign-in state
+interface Project {
+  id: string
+  name: string
+  fileUrls: string[]
+  status: string
+  updatedAt: string
+}
 
-  const mockProjects = [
-    {
-      id: 1,
-      title: 'Invoice Processing Q1',
-      thumbnail: 'https://images.pexels.com/photos/8849295/pexels-photo-8849295.jpeg?auto=compress&cs=tinysrgb&w=300&h=200',
-      lastEdited: '2 days ago'
-    },
-    {
-      id: 2,
-      title: 'Receipt Analysis',
-      thumbnail: 'https://images.pexels.com/photos/4386321/pexels-photo-4386321.jpeg?auto=compress&cs=tinysrgb&w=300&h=200',
-      lastEdited: '5 days ago'
-    },
-    {
-      id: 3,
-      title: 'Contract Documents',
-      thumbnail: 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=300&h=200',
-      lastEdited: '1 week ago'
-    },
-    {
-      id: 4,
-      title: 'Business Cards Collection',
-      thumbnail: 'https://images.pexels.com/photos/7947662/pexels-photo-7947662.jpeg?auto=compress&cs=tinysrgb&w=300&h=200',
-      lastEdited: '2 weeks ago'
-    },
-    {
-      id: 5,
-      title: 'Financial Reports',
-      thumbnail: 'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=300&h=200',
-      lastEdited: '3 weeks ago'
-    },
-    {
-      id: 6,
-      title: 'Medical Forms',
-      thumbnail: 'https://images.pexels.com/photos/3184639/pexels-photo-3184639.jpeg?auto=compress&cs=tinysrgb&w=300&h=200',
-      lastEdited: '1 month ago'
+export default function ProjectsPage() {
+  const { isSignedIn, isLoaded } = useAuth()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      fetchProjects()
+    } else if (isLoaded) {
+      setIsLoading(false)
     }
-  ]
+  }, [isSignedIn, isLoaded])
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('/api/projects')
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+    
+    if (diffInHours < 1) return 'Just now'
+    if (diffInHours < 24) return `${diffInHours} hours ago`
+    if (diffInHours < 48) return '1 day ago'
+    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)} days ago`
+    if (diffInHours < 336) return '1 week ago'
+    return `${Math.floor(diffInHours / 168)} weeks ago`
+  }
+
+  if (!isLoaded || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation variant="projects" />
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!isSignedIn) {
     return (
@@ -59,9 +79,6 @@ export default function ProjectsPage() {
           <p className="text-lg text-gray-600 mb-8">
             Access all your processed documents and projects in one place.
           </p>
-          <button className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium">
-            Sign In
-          </button>
         </div>
       </div>
     )
@@ -88,36 +105,42 @@ export default function ProjectsPage() {
         </div>
 
         {/* Projects Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {mockProjects.map((project) => (
-            <Link
-              key={project.id}
-              href={`/processed/${project.id}`}
-              className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 hover:border-blue-200"
-            >
-              <div className="aspect-video overflow-hidden">
-                <Image
-                  src={project.thumbnail}
-                  alt={project.title}
-                  width={300}
-                  height={200}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                />
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                  {project.title}
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  Edited {project.lastEdited}
-                </p>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Empty State */}
-        {mockProjects.length === 0 && (
+        {projects.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {projects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/processed/${project.id}`}
+                className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 hover:border-blue-200"
+              >
+                <div className="aspect-video overflow-hidden bg-gray-100">
+                  {project.fileUrls[0] ? (
+                    <Image
+                      src={project.fileUrls[0]}
+                      alt={project.name}
+                      width={300}
+                      height={200}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      <Plus className="w-12 h-12" />
+                    </div>
+                  )}
+                </div>
+                <div className="p-4">
+                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                    {project.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Edited {formatTimeAgo(project.updatedAt)}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          /* Empty State */
           <div className="text-center py-20">
             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <Plus className="w-12 h-12 text-gray-400" />

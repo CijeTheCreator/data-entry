@@ -1,28 +1,40 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, RefreshCw, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'react-hot-toast'
 
 interface ProjectSetupModalProps {
-  file: File
+  fileUrl: string
+  fileName: string
   onClose: () => void
   onContinue: (data: any) => void
 }
 
-export default function ProjectSetupModal({ file, onClose, onContinue }: ProjectSetupModalProps) {
-  const [projectName, setProjectName] = useState(generateProjectName())
+export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContinue }: ProjectSetupModalProps) {
+  const [projectName, setProjectName] = useState('')
   const [activeTab, setActiveTab] = useState<'scratch' | 'existing'>('scratch')
   const [columnNames, setColumnNames] = useState<string[]>([])
   const [context, setContext] = useState('')
   const [sheetLink, setSheetLink] = useState('')
   const [newColumn, setNewColumn] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
 
-  function generateProjectName() {
-    const adjectives = ['Smart', 'Quick', 'Advanced', 'Modern', 'Dynamic', 'Efficient']
-    const nouns = ['Analysis', 'Report', 'Document', 'Data', 'Processing', 'Extract']
-    const adj = adjectives[Math.floor(Math.random() * adjectives.length)]
-    const noun = nouns[Math.floor(Math.random() * nouns.length)]
-    return `${adj} ${noun} ${new Date().getFullYear()}`
+  useEffect(() => {
+    generateProjectName()
+  }, [])
+
+  const generateProjectName = async () => {
+    try {
+      const response = await fetch('/api/random-project-name')
+      const data = await response.json()
+      setProjectName(data.name)
+    } catch (error) {
+      console.error('Failed to generate project name:', error)
+      setProjectName('New Project')
+    }
   }
 
   const addColumn = () => {
@@ -36,20 +48,44 @@ export default function ProjectSetupModal({ file, onClose, onContinue }: Project
     setColumnNames(columnNames.filter(c => c !== column))
   }
 
-  const handleContinue = () => {
-    const data = {
-      name: projectName,
-      file: file.name,
-      type: activeTab,
-      ...(activeTab === 'scratch' ? {
-        columnNames,
-        context
-      } : {
-        sheetLink,
-        context
+  const handleContinue = async () => {
+    setIsLoading(true)
+    
+    try {
+      const data = {
+        name: projectName,
+        fileUrl,
+        type: activeTab,
+        ...(activeTab === 'scratch' ? {
+          columnNames,
+          context
+        } : {
+          sheetLink,
+          context
+        })
+      }
+
+      const response = await fetch('/api/create-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
       })
+
+      if (!response.ok) {
+        throw new Error('Failed to create project')
+      }
+
+      const result = await response.json()
+      
+      toast.success('Project created successfully!')
+      onContinue(data)
+      router.push(`/processed/${result.projectId}`)
+    } catch (error) {
+      console.error('Project creation error:', error)
+      toast.error('Failed to create project. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
-    onContinue(data)
   }
 
   return (
@@ -78,7 +114,7 @@ export default function ProjectSetupModal({ file, onClose, onContinue }: Project
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <button
-              onClick={() => setProjectName(generateProjectName())}
+              onClick={generateProjectName}
               className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
               title="Generate new name"
             >
@@ -202,15 +238,18 @@ export default function ProjectSetupModal({ file, onClose, onContinue }: Project
         <div className="flex items-center justify-end space-x-4 mt-8">
           <button
             onClick={onClose}
-            className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+            disabled={isLoading}
+            className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleContinue}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            disabled={isLoading}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center space-x-2"
           >
-            Continue
+            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>Continue</span>
           </button>
         </div>
       </div>

@@ -1,0 +1,137 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects       Project[]
+  oauthTokens    OAuthToken[]
+  connectedSheets ConnectedSheet[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  userId      String
+  fileUrls    String[] // Array of S3 URLs
+  jsonData    Json?    // Extracted structured data
+  csvData     String?  // CSV representation
+  status      ProjectStatus @default(PROCESSING)
+  dataPoints  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  states          ProjectState[]
+  textAnalysis    TextAnalysis?
+  audioAnalysis   AudioAnalysis?
+  connectedSheet  ConnectedSheet?
+
+  @@map("projects")
+}
+
+model ProjectState {
+  id        String   @id @default(cuid())
+  projectId String
+  version   Int
+  jsonData  Json
+  csvData   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, version])
+  @@map("project_states")
+}
+
+model TextAnalysis {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  content   String
+  dataHash  String   // Hash of the data used to generate this analysis
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("text_analyses")
+}
+
+model AudioAnalysis {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  audioUrl  String   // S3 URL of the generated audio
+  content   String   // Text that was converted to audio
+  dataHash  String   // Hash of the data used to generate this analysis
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("audio_analyses")
+}
+
+model OAuthToken {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String   // 'google'
+  accessToken  String   // Encrypted
+  refreshToken String   // Encrypted
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("oauth_tokens")
+}
+
+model ConnectedSheet {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String?  @unique
+  sheetId   String
+  sheetUrl  String
+  title     String?
+  lastSync  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("connected_sheets")
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  operation String
+  error     String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@map("error_logs")
+}
+
+enum ProjectStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
