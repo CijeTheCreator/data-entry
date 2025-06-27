@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, RefreshCw, Plus, Loader2 } from 'lucide-react'
+import { X, RefreshCw, Plus, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
@@ -17,9 +17,20 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
   const [activeTab, setActiveTab] = useState<'scratch' | 'existing'>('scratch')
   const [columnNames, setColumnNames] = useState<string[]>([])
   const [context, setContext] = useState('')
-  const [sheetLink, setSheetLink] = useState('')
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState('')
   const [newColumn, setNewColumn] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [accessStatus, setAccessStatus] = useState<{
+    checking: boolean
+    verified: boolean
+    error: string | null
+    title?: string
+    serviceAccountEmail?: string
+  }>({
+    checking: false,
+    verified: false,
+    error: null
+  })
   const router = useRouter()
 
   useEffect(() => {
@@ -48,7 +59,56 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
     setColumnNames(columnNames.filter(c => c !== column))
   }
 
+  const checkSpreadsheetAccess = async () => {
+    if (!spreadsheetUrl.trim()) {
+      toast.error('Please enter a Google Sheets URL')
+      return
+    }
+
+    setAccessStatus({ checking: true, verified: false, error: null })
+
+    try {
+      const response = await fetch('/api/sheets/access-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spreadsheetUrl: spreadsheetUrl.trim() })
+      })
+
+      const data = await response.json()
+
+      if (data.hasAccess) {
+        setAccessStatus({
+          checking: false,
+          verified: true,
+          error: null,
+          title: data.title,
+          serviceAccountEmail: data.serviceAccountEmail
+        })
+        toast.success('Access verified successfully!')
+      } else {
+        setAccessStatus({
+          checking: false,
+          verified: false,
+          error: data.error,
+          serviceAccountEmail: data.serviceAccountEmail
+        })
+      }
+    } catch (error) {
+      console.error('Access check failed:', error)
+      setAccessStatus({
+        checking: false,
+        verified: false,
+        error: 'Failed to check access. Please try again.'
+      })
+    }
+  }
+
   const handleContinue = async () => {
+    if (activeTab === 'existing' && !accessStatus.verified) {
+      toast.error('Please verify access to the Google Sheet first')
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -60,7 +120,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
           columnNames,
           context
         } : {
-          sheetLink,
+          spreadsheetUrl: spreadsheetUrl.trim(),
           context
         })
       }
@@ -129,8 +189,8 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
             <button
               onClick={() => setActiveTab('scratch')}
               className={`px-4 py-2 font-medium transition-colors border-b-2 ${activeTab === 'scratch'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
               Create from scratch
@@ -138,8 +198,8 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
             <button
               onClick={() => setActiveTab('existing')}
               className={`px-4 py-2 font-medium transition-colors border-b-2 ${activeTab === 'existing'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
               Link existing project
@@ -209,13 +269,62 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Google Sheets Link
               </label>
-              <input
-                type="url"
-                value={sheetLink}
-                onChange={(e) => setSheetLink(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <div className="flex items-center space-x-2">
+                <div className="flex-1 relative">
+                  <input
+                    type="url"
+                    value={spreadsheetUrl}
+                    onChange={(e) => {
+                      setSpreadsheetUrl(e.target.value)
+                      setAccessStatus({ checking: false, verified: false, error: null })
+                    }}
+                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {accessStatus.verified && (
+                    <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-600" />
+                  )}
+                </div>
+                <button
+                  onClick={checkSpreadsheetAccess}
+                  disabled={accessStatus.checking || !spreadsheetUrl.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {accessStatus.checking ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span>Check Access</span>
+                  )}
+                </button>
+              </div>
+
+              {accessStatus.error && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-red-700">
+                      <p className="font-medium mb-1">Access Error</p>
+                      <p>{accessStatus.error}</p>
+                      {accessStatus.serviceAccountEmail && (
+                        <p className="mt-2 font-mono text-xs bg-red-100 p-2 rounded">
+                          Service Account: {accessStatus.serviceAccountEmail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {accessStatus.verified && accessStatus.title && (
+                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Check className="w-5 h-5 text-green-600" />
+                    <div className="text-sm text-green-700">
+                      <span className="font-medium">Access verified:</span> {accessStatus.title}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

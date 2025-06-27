@@ -1,53 +1,141 @@
 import { google } from 'googleapis'
 import { prisma } from './prisma'
-import { decrypt } from './encryption'
 
-export async function getGoogleSheetsClient(userId: string) {
-  const oauthToken = await prisma.oAuthToken.findUnique({
-    where: { userId_provider: { userId, provider: 'google' } }
+// Initialize Google Sheets client with service account
+function getGoogleSheetsClient() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      project_id: process.env.GOOGLE_SERVICE_ACCOUNT_PROJECT_ID,
+    },
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
   })
 
-  if (!oauthToken) {
-    throw new Error('No Google OAuth token found')
+  return google.sheets({ version: 'v4', auth })
+}
+
+// Extract spreadsheet ID from various Google Sheets URL formats
+export function extractSpreadsheetId(url: string): string | null {
+  const patterns = [
+    /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/,
+    /^([a-zA-Z0-9-_]+)$/, // Direct ID
+  ]
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match) {
+      return match[1]
+    }
   }
 
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  )
-
-  oauth2Client.setCredentials({
-    access_token: decrypt(oauthToken.accessToken),
-    refresh_token: decrypt(oauthToken.refreshToken),
-  })
-
-  return google.sheets({ version: 'v4', auth: oauth2Client })
+  return null
 }
 
-export async function createGoogleSheet(userId: string, title: string) {
-  const sheets = await getGoogleSheetsClient(userId)
-  
-  const response = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: {
-        title,
+// Check if service account has access to a spreadsheet
+export async function checkSpreadsheetAccess(spreadsheetUrl: string): Promise<{ hasAccess: boolean; title?: string; error?: string }> {
+  try {
+    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+    
+    if (!spreadsheetId) {
+      return {
+        hasAccess: false,
+        error: 'Invalid Google Sheets URL format'
+      }
+    }
+
+    const sheets = getGoogleSheetsClient()
+    
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'properties.title'
+    })
+
+    return {
+      hasAccess: true,
+      title: response.data.properties?.title || 'Untitled Spreadsheet'
+    }
+  } catch (error: any) {
+    if (error.code === 403) {
+      return {
+        hasAccess: false,
+        error: `Please share your Google Sheet with this email address: ${process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL}`
+      }
+    } else if (error.code === 404) {
+      return {
+        hasAccess: false,
+        error: 'Spreadsheet not found. Please check the URL and make sure the sheet exists.'
+      }
+    } else {
+      return {
+        hasAccess: false,
+        error: 'Failed to access spreadsheet. Please try again.'
+      }
+    }
+  }
+}
+
+// Create a new Google Sheet
+export async function createGoogleSheet(title: string): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+  try {
+    const sheets = getGoogleSheetsClient()
+    
+    const response = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: {
+          title,
+        },
       },
-    },
-  })
+    })
 
-  return response.data
+    const spreadsheetId = response.data.spreadsheetId!
+    const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`
+
+    return {
+      spreadsheetId,
+      spreadsheetUrl
+    }
+  } catch (error) {
+    console.error('Failed to create Google Sheet:', error)
+    throw new Error('Failed to create Google Sheet')
+  }
 }
 
-export async function writeToSheet(userId: string, sheetId: string, data: string[][]) {
-  const sheets = await getGoogleSheetsClient(userId)
-  
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: 'A1',
-    valueInputOption: 'RAW',
-    requestBody: {
-      values: data,
-    },
-  })
+// Write data to a Google Sheet
+export async function writeToSheet(spreadsheetId: string, data: string[][]): Promise<void> {
+  try {
+    const sheets = getGoogleSheetsClient()
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'A1',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: data,
+      },
+    })
+  } catch (error) {
+    console.error('Failed to write to Google Sheet:', error)
+    throw new Error('Failed to write to Google Sheet')
+  }
+}
+
+// Read data from a Google Sheet
+export async function readFromSheet(spreadsheetId: string, range: string = 'A1:Z1000'): Promise<string[][]> {
+  try {
+    const sheets = getGoogleSheetsClient()
+    
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    })
+
+    return response.data.values || []
+  } catch (error) {
+    console.error('Failed to read from Google Sheet:', error)
+    throw new Error('Failed to read from Google Sheet')
+  }
 }
