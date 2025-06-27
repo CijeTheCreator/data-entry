@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Loader2 } from 'lucide-react'
-import { useAuth } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import { toast } from 'react-hot-toast'
 import ProjectSetupModal from './ProjectSetupModal'
 
@@ -17,7 +17,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('')
   const [uploadedFileName, setUploadedFileName] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { isSignedIn } = useAuth()
+  const { isSignedIn } = useUser()
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -32,7 +32,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
-    
+
     const files = e.dataTransfer.files
     if (files.length > 0) {
       handleFileUpload(files[0])
@@ -53,7 +53,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
     }
 
     setIsUploading(true)
-    
+
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -71,7 +71,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
       setUploadedFileUrl(data.url)
       setUploadedFileName(data.filename)
       setShowSetupModal(true)
-      
+
       if (onFileSelect) {
         onFileSelect(file)
       }
@@ -96,7 +96,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
             <div className="text-4xl font-bold mb-4">Drop file anywhere</div>
             <div className="text-lg opacity-80">Smart Document Processing</div>
           </div>
-          
+
           {/* Corner Decorations */}
           <div className="absolute top-8 left-8 w-16 h-16 border-t-4 border-l-4 border-white rounded-tl-lg"></div>
           <div className="absolute top-8 right-8 w-16 h-16 border-t-4 border-r-4 border-white rounded-tr-lg"></div>
@@ -117,7 +117,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
       )}
 
       {/* Upload Area */}
-      <div 
+      <div
         className="relative"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -130,7 +130,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
           className="hidden"
           accept="image/*,.pdf,.zip,.doc,.docx,audio/*"
         />
-        
+
         <div className="text-center">
           <button
             onClick={openFileDialog}
@@ -139,7 +139,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
             <Upload className="w-5 h-5" />
             <span>Upload File</span>
           </button>
-          
+
           <div className="text-gray-600">
             or drop a file, <button onClick={openFileDialog} className="text-blue-600 hover:underline">click here</button>
           </div>

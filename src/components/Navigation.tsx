@@ -1,13 +1,15 @@
+"use client"
+
 import Link from 'next/link'
 import { FileText } from 'lucide-react'
-import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs'
+import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/nextjs'
 
 interface NavigationProps {
   variant?: 'default' | 'projects'
 }
 
 export default function Navigation({ variant = 'default' }: NavigationProps) {
-  const { isSignedIn } = useAuth()
+  const { isSignedIn } = useUser()
 
   return (
     <nav className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
@@ -15,15 +17,15 @@ export default function Navigation({ variant = 'default' }: NavigationProps) {
         <FileText className="w-8 h-8 text-blue-600" />
         <span className="text-xl font-bold">DataFlow</span>
       </Link>
-      
+
       <div className="flex items-center space-x-6">
-        <Link 
-          href="/projects" 
+        <Link
+          href="/projects"
           className="text-gray-600 hover:text-gray-800 font-medium transition-colors"
         >
           Projects
         </Link>
-        
+
         {isSignedIn ? (
           <UserButton afterSignOutUrl="/" />
         ) : (

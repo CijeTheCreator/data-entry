@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Image from 'next/image'
 import { CheckCircle, FileText, Headphones, Undo2, Redo2, Download, ChevronDown, X, Mail, Save, Upload, Loader2 } from 'lucide-react'
-import { useAuth } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import { toast } from 'react-hot-toast'
 import Navigation from '@/components/Navigation'
 
@@ -25,7 +25,7 @@ interface Project {
 
 export default function ProcessedPage() {
   const params = useParams()
-  const { isSignedIn, isLoaded } = useAuth()
+  const { isSignedIn, isLoaded } = useUser()
   const [project, setProject] = useState<Project | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showTextModal, setShowTextModal] = useState(false)
@@ -64,7 +64,7 @@ export default function ProcessedPage() {
   const handleTextAnalysis = async () => {
     setShowTextModal(true)
     setIsLoadingText(true)
-    
+
     try {
       const response = await fetch('/api/generate-text-analysis', {
         method: 'POST',
@@ -89,7 +89,7 @@ export default function ProcessedPage() {
   const handleAudioAnalysis = async () => {
     setShowAudioModal(true)
     setIsLoadingAudio(true)
-    
+
     try {
       const response = await fetch('/api/generate-audio-analysis', {
         method: 'POST',
@@ -120,7 +120,7 @@ export default function ProcessedPage() {
     const date = new Date(dateString)
     const now = new Date()
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-    
+
     if (diffInMinutes < 1) return 'Just now'
     if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`
@@ -175,7 +175,7 @@ export default function ProcessedPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      
+
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header Actions */}
         <div className="flex items-center justify-between mb-8">
@@ -185,7 +185,7 @@ export default function ProcessedPage() {
               {project.connectedSheet ? 'Synced with Google Sheets' : 'Processing Complete'}
             </span>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <button className="p-2 text-gray-500 hover:text-gray-700 transition-colors" title="Undo">
               <Undo2 className="w-5 h-5" />
@@ -193,7 +193,7 @@ export default function ProcessedPage() {
             <button className="p-2 text-gray-500 hover:text-gray-700 transition-colors" title="Redo">
               <Redo2 className="w-5 h-5" />
             </button>
-            
+
             <div className="relative">
               <button
                 onClick={() => setShowDownloadMenu(!showDownloadMenu)}
@@ -203,22 +203,22 @@ export default function ProcessedPage() {
                 <span>Download</span>
                 <ChevronDown className="w-4 h-4" />
               </button>
-              
+
               {showDownloadMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-                  <button 
+                  <button
                     onClick={() => handleDownload('csv')}
                     className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
                   >
                     CSV
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDownload('json')}
                     className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
                   >
                     JSON
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDownload('xls')}
                     className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
                   >
@@ -255,7 +255,7 @@ export default function ProcessedPage() {
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Document Analysis</h3>
-              
+
               <div className="space-y-4">
                 <button
                   onClick={handleTextAnalysis}
@@ -264,7 +264,7 @@ export default function ProcessedPage() {
                   <FileText className="w-5 h-5" />
                   <span>Generate Text Analysis</span>
                 </button>
-                
+
                 <button
                   onClick={handleAudioAnalysis}
                   className="w-full bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-colors font-medium inline-flex items-center justify-center space-x-3"
@@ -283,7 +283,7 @@ export default function ProcessedPage() {
             {/* Document Info */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Project Details</h3>
-              
+
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Project Name:</span>
@@ -379,27 +379,26 @@ export default function ProcessedPage() {
                       <p className="text-purple-100">Duration: 2:34</p>
                     </div>
                   </div>
-                  
+
                   <div className="mt-6">
                     <audio controls className="w-full" src={audioUrl}>
                       Your browser does not support the audio element.
                     </audio>
                   </div>
-                  
+
                   <div className="mt-4 flex items-center justify-center space-x-2 text-purple-100 text-sm">
                     <div className="flex space-x-1">
                       {[...Array(12)].map((_, i) => (
                         <div
                           key={i}
-                          className={`w-1 bg-white rounded-full ${
-                            i < 8 ? 'h-4 opacity-100' : 'h-2 opacity-50'
-                          }`}
+                          className={`w-1 bg-white rounded-full ${i < 8 ? 'h-4 opacity-100' : 'h-2 opacity-50'
+                            }`}
                         ></div>
                       ))}
                     </div>
                   </div>
                 </div>
-                
+
                 <p className="text-gray-600 mb-4">
                   AI-generated audio summary of your document analysis, highlighting key insights and data points.
                 </p>

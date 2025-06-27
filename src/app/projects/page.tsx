@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Plus, Loader2 } from 'lucide-react'
-import { useAuth } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import Navigation from '@/components/Navigation'
 
 interface Project {
@@ -16,7 +16,7 @@ interface Project {
 }
 
 export default function ProjectsPage() {
-  const { isSignedIn, isLoaded } = useAuth()
+  const { isSignedIn, isLoaded } = useUser()
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -46,7 +46,7 @@ export default function ProjectsPage() {
     const date = new Date(dateString)
     const now = new Date()
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
+
     if (diffInHours < 1) return 'Just now'
     if (diffInHours < 24) return `${diffInHours} hours ago`
     if (diffInHours < 48) return '1 day ago'
@@ -87,7 +87,7 @@ export default function ProjectsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation variant="projects" />
-      
+
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">

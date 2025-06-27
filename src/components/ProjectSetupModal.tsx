@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, RefreshCw, Plus } from 'lucide-react'
+import { X, RefreshCw, Plus, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
@@ -50,7 +50,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
 
   const handleContinue = async () => {
     setIsLoading(true)
-    
+
     try {
       const data = {
         name: projectName,
@@ -76,7 +76,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
       }
 
       const result = await response.json()
-      
+
       toast.success('Project created successfully!')
       onContinue(data)
       router.push(`/processed/${result.projectId}`)
@@ -128,21 +128,19 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
           <div className="flex border-b border-gray-200">
             <button
               onClick={() => setActiveTab('scratch')}
-              className={`px-4 py-2 font-medium transition-colors border-b-2 ${
-                activeTab === 'scratch'
+              className={`px-4 py-2 font-medium transition-colors border-b-2 ${activeTab === 'scratch'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
+                }`}
             >
               Create from scratch
             </button>
             <button
               onClick={() => setActiveTab('existing')}
-              className={`px-4 py-2 font-medium transition-colors border-b-2 ${
-                activeTab === 'existing'
+              className={`px-4 py-2 font-medium transition-colors border-b-2 ${activeTab === 'existing'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
+                }`}
             >
               Link existing project
             </button>
@@ -192,7 +190,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
                 Leave empty and AI will decide the columns automatically
               </p>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Optional Context for AI
@@ -219,7 +217,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Optional Context for AI
