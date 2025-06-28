@@ -1,80 +1,168 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { mistral } from '@ai-sdk/mistral'
-import { generateText } from 'ai'
+// app/api/extract-document/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma'
+import { extractAndProcessDocuments } from '../../../../lib/extract-document-helpers';
 import { logOperation, logError } from '../../../../lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
-    const { projectId, fileUrl, columnNames, context } = await req.json()
+    logOperation('extract-document', 'API route called');
 
-    logOperation('extract-document', `Starting document extraction for projectId=${projectId}`)
+    const { projectId, fileUrls, columnNames, context } = await req.json();
 
-    // For now, simulate document extraction
-    // In a real implementation, you would:
-    // 1. Download file from S3
-    // 2. Determine file type (zip, image, PDF, audio)
-    // 3. Extract content using appropriate service (Mistral OCR, Deepgram)
-    // 4. Process with LLM to generate CSV
+    logOperation('extract-document', 'Request payload parsed', {
+      projectId,
+      fileUrlsCount: fileUrls?.length,
+      hasColumnNames: !!columnNames,
+      hasContext: !!context
+    });
 
-    const prompt = `
-    Extract structured data from the uploaded document and convert it to CSV format.
-    ${columnNames?.length ? `Use these column names: ${columnNames.join(', ')}` : 'Determine appropriate column names automatically.'}
-    ${context ? `Additional context: ${context}` : ''}
-    
-    Return only valid CSV data with headers.
-    `
+    // Validate required fields
+    if (!projectId) {
+      logOperation('extract-document', 'Validation failed: missing projectId');
+      return NextResponse.json(
+        { error: 'Project ID is required' },
+        { status: 400 }
+      );
+    }
 
-    // Simulate extraction with mock data
-    const mockCsvData = `Name,Email,Phone,Company
-John Doe,john@example.com,555-0123,Acme Corp
-Jane Smith,jane@example.com,555-0456,Tech Inc
-Bob Johnson,bob@example.com,555-0789,Data Co`
+    if (!fileUrls || !Array.isArray(fileUrls) || fileUrls.length === 0) {
+      logOperation('extract-document', 'Validation failed: invalid fileUrls', { fileUrls });
+      return NextResponse.json(
+        { error: 'File URLs array is required and must not be empty' },
+        { status: 400 }
+      );
+    }
 
-    // Parse CSV to JSON for storage
-    const lines = mockCsvData.split('\n')
-    const headers = lines[0].split(',')
-    const jsonData = lines.slice(1).map(line => {
-      const values = line.split(',')
-      return headers.reduce((obj, header, index) => {
-        obj[header] = values[index] || ''
-        return obj
-      }, {} as Record<string, string>)
-    })
+    logOperation('extract-document', 'Validation passed, updating project status to PROCESSING', {
+      projectId
+    });
 
-    // Update project with extracted data
+    // Update project status to processing
     await prisma.project.update({
       where: { id: projectId },
       data: {
-        jsonData,
-        csvData: mockCsvData,
-        status: 'COMPLETED',
-        dataPoints: headers.length,
+        status: 'PROCESSING',
       }
-    })
+    });
 
-    // Create initial state
-    await prisma.projectState.create({
-      data: {
+    logOperation('extract-document', 'Project status updated to PROCESSING');
+
+    try {
+      logOperation('extract-document', 'Starting document extraction and processing', {
         projectId,
-        version: 1,
-        jsonData,
-        csvData: mockCsvData,
-      }
-    })
+        fileUrls,
+        columnNames,
+        context
+      });
 
-    // Trigger sync with spreadsheet
-    fetch(`${req.nextUrl.origin}/api/sync-with-spreadsheet`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, csvData: mockCsvData })
-    }).catch(error => logError('extract-document', error, { step: 'sync' }))
+      // Extract and process documents
+      const { csvData, jsonData, dataPoints } = await extractAndProcessDocuments(
+        fileUrls,
+        columnNames,
+        context
+      );
 
-    logOperation('extract-document', `Successfully extracted document for projectId=${projectId}`)
+      logOperation('extract-document', 'Document processing completed, updating database', {
+        projectId,
+        dataPoints,
+        recordCount: jsonData.length
+      });
 
-    return NextResponse.json({ success: true, dataPoints: headers.length })
+      // Update project with extracted data
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          jsonData,
+          csvData,
+          status: 'COMPLETED',
+          dataPoints,
+        }
+      });
+
+      logOperation('extract-document', 'Project updated with extracted data');
+
+      // Create initial state
+      await prisma.projectState.create({
+        data: {
+          projectId,
+          version: 1,
+          jsonData,
+          csvData,
+        }
+      });
+
+      logOperation('extract-document', 'Initial project state created', {
+        projectId,
+        version: 1
+      });
+
+      // Trigger sync with spreadsheet
+      logOperation('extract-document', 'Triggering spreadsheet sync', { projectId });
+      fetch(`${req.nextUrl.origin}/api/sync-with-spreadsheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, csvData })
+      }).catch(error => {
+        logOperation('extract-document', 'Spreadsheet sync failed (non-blocking)', {
+          projectId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        // Note: We don't throw here to avoid breaking the main flow
+      });
+
+      logOperation('extract-document', 'Document extraction completed successfully', {
+        projectId,
+        dataPoints,
+        recordCount: jsonData.length
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Document extraction completed successfully',
+        data: {
+          projectId,
+          dataPoints,
+          recordCount: jsonData.length
+        }
+      });
+
+    } catch (extractionError) {
+      logOperation('extract-document', 'Document extraction failed, updating project status', {
+        projectId,
+        error: extractionError instanceof Error ? extractionError.message : 'Unknown error'
+      });
+
+      // Update project status to failed
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          status: 'FAILED',
+        }
+      });
+
+      logOperation('extract-document', 'Project status updated to FAILED');
+
+      return NextResponse.json(
+        {
+          error: 'Document extraction failed',
+          details: extractionError instanceof Error ? extractionError.message : 'Unknown error'
+        },
+        { status: 500 }
+      );
+    }
+
   } catch (error) {
-    logError('extract-document', error)
-    return NextResponse.json({ error: 'Document extraction failed' }, { status: 500 })
+    logOperation('extract-document', 'API route error', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }

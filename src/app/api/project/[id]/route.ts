@@ -45,6 +45,7 @@ export async function GET(
       updatedAt: project.updatedAt,
       connectedSheet: project.connectedSheet,
       currentVersion: project.states[0]?.version || 1,
+      screenshotUrl: project.screenshotUrl
     })
   } catch (error) {
     console.error('[project-get] Error:', error)

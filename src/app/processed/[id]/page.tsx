@@ -54,6 +54,8 @@ export default function ProcessedPage() {
       } else if (response.status === 404) {
         toast.error('Project not found')
       }
+
+      console.log("Project: ", project)
     } catch (error) {
       console.error('Failed to fetch project:', error)
       toast.error('Failed to load project')
@@ -172,6 +174,7 @@ export default function ProcessedPage() {
       </div>
     )
   }
+  console.log("Project: ", project)
 
   return (
     <div className="min-h-screen bg-gray-50">
