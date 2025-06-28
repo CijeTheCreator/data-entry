@@ -4,6 +4,20 @@ import { prisma } from '../../../../lib/prisma'
 import { createGoogleSheet } from '../../../../lib/google-sheets'
 import { logOperation, logError } from '../../../../lib/utils'
 
+// Function to extract sheet ID from Google Sheets URL
+function extractSheetId(url: string): string | null {
+  if (!url) return null
+
+  try {
+    // Match pattern: https://docs.google.com/spreadsheets/d/{SHEET_ID}/...
+    const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    return match ? match[1] : null
+  } catch (error) {
+    logError('create-project', error, { step: 'extract-sheet-id', url })
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     logOperation('create-project', 'Starting authentication check')
@@ -16,8 +30,8 @@ export async function POST(req: NextRequest) {
 
     logOperation('create-project', 'Parsing request body')
     const body = await req.json()
-    const { name, fileUrl, type, columnNames, context, sheetId } = body
-    logOperation('create-project', `Request params: name=${name}, type=${type}, sheetId=${sheetId}`)
+    const { name, fileUrl, type, columnNames, context, sheetId, spreadsheetUrl } = body
+    logOperation('create-project', `Request params: name=${name}, type=${type}, sheetId=${sheetId}, spreadsheetUrl=${spreadsheetUrl}`)
 
     // Get user from database
     logOperation('create-project', `Looking up user with clerkId=${userId}`)
@@ -31,10 +45,17 @@ export async function POST(req: NextRequest) {
     logOperation('create-project', `Found user with id=${user.id}`)
 
     let connectedSheetId = sheetId
-    logOperation('create-project', `Initial connectedSheetId: ${connectedSheetId}`)
+
+    // Extract sheet ID from spreadsheetUrl if provided and no sheetId
+    if (!connectedSheetId && spreadsheetUrl) {
+      connectedSheetId = extractSheetId(spreadsheetUrl)
+      logOperation('create-project', `Extracted sheetId from URL: ${connectedSheetId}`)
+    }
+
+    logOperation('create-project', `Final connectedSheetId: ${connectedSheetId}`)
 
     // If creating from scratch and no sheet provided, create one
-    if (type === 'scratch' && !sheetId) {
+    if (type === 'scratch' && !connectedSheetId) {
       logOperation('create-project', 'Creating new Google Sheet (type=scratch, no sheetId provided)')
       try {
         const sheet = await createGoogleSheet(name)
@@ -58,7 +79,7 @@ export async function POST(req: NextRequest) {
         // Continue without sheet if creation fails
       }
     } else {
-      logOperation('create-project', `Skipping Google Sheet creation: type=${type}, sheetId=${sheetId}`)
+      logOperation('create-project', `Skipping Google Sheet creation: type=${type}, connectedSheetId=${connectedSheetId}`)
     }
 
     // Create project
@@ -96,11 +117,14 @@ export async function POST(req: NextRequest) {
         if (type !== 'scratch') {
           logOperation('create-project', `Creating connectedSheet record for existing sheet: ${connectedSheetId}`)
           try {
+            // Use the provided spreadsheetUrl or construct it
+            const finalSpreadsheetUrl = spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${connectedSheetId}`
+
             const connectedSheet = await prisma.connectedSheet.create({
               data: {
                 userId: user.id,
                 spreadsheetId: connectedSheetId,
-                spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${connectedSheetId}`,
+                spreadsheetUrl: finalSpreadsheetUrl,
                 title: name,
                 projectId: project.id
               }

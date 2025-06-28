@@ -18,6 +18,21 @@ function getGoogleSheetsClient() {
   return google.sheets({ version: 'v4', auth })
 }
 
+function getGoogleDriveClient() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      project_id: process.env.GOOGLE_SERVICE_ACCOUNT_PROJECT_ID,
+    },
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
+  })
+  return google.drive({ version: 'v3', auth })
+}
+
 // Extract spreadsheet ID from various Google Sheets URL formats
 export function extractSpreadsheetId(url: string): string | null {
   const patterns = [
@@ -39,7 +54,7 @@ export function extractSpreadsheetId(url: string): string | null {
 export async function checkSpreadsheetAccess(spreadsheetUrl: string): Promise<{ hasAccess: boolean; title?: string; error?: string }> {
   try {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
-    
+
     if (!spreadsheetId) {
       return {
         hasAccess: false,
@@ -48,7 +63,7 @@ export async function checkSpreadsheetAccess(spreadsheetUrl: string): Promise<{ 
     }
 
     const sheets = getGoogleSheetsClient()
-    
+
     const response = await sheets.spreadsheets.get({
       spreadsheetId,
       fields: 'properties.title'
@@ -82,7 +97,8 @@ export async function checkSpreadsheetAccess(spreadsheetUrl: string): Promise<{ 
 export async function createGoogleSheet(title: string): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
   try {
     const sheets = getGoogleSheetsClient()
-    
+    const drive = getGoogleDriveClient()
+
     const response = await sheets.spreadsheets.create({
       requestBody: {
         properties: {
@@ -93,6 +109,15 @@ export async function createGoogleSheet(title: string): Promise<{ spreadsheetId:
 
     const spreadsheetId = response.data.spreadsheetId!
     const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`
+
+    // Make the sheet viewable by anyone with the link
+    await drive.permissions.create({
+      fileId: spreadsheetId,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone',
+      },
+    })
 
     return {
       spreadsheetId,
@@ -108,7 +133,7 @@ export async function createGoogleSheet(title: string): Promise<{ spreadsheetId:
 export async function writeToSheet(spreadsheetId: string, data: string[][]): Promise<void> {
   try {
     const sheets = getGoogleSheetsClient()
-    
+
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: 'A1',
@@ -127,7 +152,7 @@ export async function writeToSheet(spreadsheetId: string, data: string[][]): Pro
 export async function readFromSheet(spreadsheetId: string, range: string = 'A1:Z1000'): Promise<string[][]> {
   try {
     const sheets = getGoogleSheetsClient()
-    
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range,
