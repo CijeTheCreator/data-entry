@@ -8,8 +8,11 @@ export default authMiddleware({
     "/sign-up(.*)",
     "/api/webhooks(.*)",
     "/api/extract-document", // Add this line
+    "/api/upload-file", // Add this line
     "/api/sync-with-spreadsheet", // Add this line
     "/api/get-document-screenshot", // Add this line
+    "/api/random-project-name", // Add this line
+    "/api/sheets/access-check", // Add this line
   ],
   // Routes that can always be accessed, and have
   // no authentication information

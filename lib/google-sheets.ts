@@ -164,3 +164,125 @@ export async function readFromSheet(spreadsheetId: string, range: string = 'A1:Z
     throw new Error('Failed to read from Google Sheet')
   }
 }
+
+// Parse CSV string into array of arrays
+export function parseCsv(csvData: string): string[][] {
+  if (!csvData.trim()) {
+    return []
+  }
+
+  const lines = csvData.trim().split('\n')
+  return lines.map(line => {
+    // Simple CSV parsing - handles basic cases
+    // For more complex CSV parsing with quotes, escapes, etc., consider using a CSV library
+    return line.split(',').map(cell => cell.trim())
+  })
+}
+
+// Merge existing spreadsheet data with new CSV data
+export function mergeSpreadsheetData(existingData: string[][], newCsvData: string[][]): string[][] {
+  // If no existing data, return new data
+  if (!existingData || existingData.length === 0) {
+    return newCsvData
+  }
+
+  // If no new data, return existing data
+  if (!newCsvData || newCsvData.length === 0) {
+    return existingData
+  }
+
+  // Get headers from both datasets
+  const existingHeaders = existingData[0] || []
+  const newHeaders = newCsvData[0] || []
+
+  // Create a combined header set, preserving order of existing headers first
+  const combinedHeaders: string[] = [...existingHeaders]
+
+  // Add new headers that don't exist in existing headers
+  newHeaders.forEach(header => {
+    if (!existingHeaders.includes(header)) {
+      combinedHeaders.push(header)
+    }
+  })
+
+  // Create header index maps for easier lookup
+  const existingHeaderMap = new Map<string, number>()
+  existingHeaders.forEach((header, index) => {
+    existingHeaderMap.set(header, index)
+  })
+
+  const newHeaderMap = new Map<string, number>()
+  newHeaders.forEach((header, index) => {
+    newHeaderMap.set(header, index)
+  })
+
+  const combinedHeaderMap = new Map<string, number>()
+  combinedHeaders.forEach((header, index) => {
+    combinedHeaderMap.set(header, index)
+  })
+
+  // Start building the merged data with the combined headers
+  const mergedData: string[][] = [combinedHeaders]
+
+  // Add existing data rows (skip header row)
+  for (let i = 1; i < existingData.length; i++) {
+    const existingRow = existingData[i]
+    const newRow = new Array(combinedHeaders.length).fill('')
+
+    // Map existing data to new structure
+    existingHeaders.forEach((header, oldIndex) => {
+      const newIndex = combinedHeaderMap.get(header)
+      if (newIndex !== undefined && existingRow[oldIndex] !== undefined) {
+        newRow[newIndex] = existingRow[oldIndex]
+      }
+    })
+
+    mergedData.push(newRow)
+  }
+
+  // Add new CSV data rows (skip header row)
+  for (let i = 1; i < newCsvData.length; i++) {
+    const newCsvRow = newCsvData[i]
+    const newRow = new Array(combinedHeaders.length).fill('')
+
+    // Map new CSV data to combined structure
+    newHeaders.forEach((header, oldIndex) => {
+      const newIndex = combinedHeaderMap.get(header)
+      if (newIndex !== undefined && newCsvRow[oldIndex] !== undefined) {
+        newRow[newIndex] = newCsvRow[oldIndex]
+      }
+    })
+
+    mergedData.push(newRow)
+  }
+
+  return mergedData
+}
+
+// Clear entire sheet and write new data
+export async function clearAndWriteToSheet(spreadsheetId: string, data: string[][]): Promise<void> {
+  try {
+    const sheets = getGoogleSheetsClient()
+
+    // First, clear the existing content
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: 'A1:Z1000', // Clear a large range to ensure all data is removed
+    })
+
+    // Then write the new data
+    if (data.length > 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: 'A1',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: data,
+        },
+      })
+    }
+  } catch (error) {
+    console.error('Failed to clear and write to Google Sheet:', error)
+    throw new Error('Failed to clear and write to Google Sheet')
+  }
+}

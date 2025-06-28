@@ -16,6 +16,7 @@ interface Project {
   dataPoints: number
   createdAt: string
   updatedAt: string
+  screenshotUrl: string
   connectedSheet?: {
     sheetUrl: string
     lastSync: string
@@ -237,7 +238,7 @@ export default function ProcessedPage() {
             <div className="aspect-video bg-gray-100">
               {project.fileUrls[project.fileUrls.length - 1] ? (
                 <Image
-                  src={project.fileUrls[project.fileUrls.length - 1]}
+                  src={project.screenshotUrl || project.fileUrls[project.fileUrls.length - 1]}
                   alt="Processed document"
                   width={800}
                   height={450}
