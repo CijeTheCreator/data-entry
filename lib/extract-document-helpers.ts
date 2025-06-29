@@ -87,38 +87,55 @@ export async function extractTextFromAudio(fileUrl: string): Promise<string> {
 }
 
 /**
- * Extracts text from images using Mistral OCR
+ * Extracts text from images using Mistral Vision API
  */
 export async function extractTextFromImage(fileUrl: string): Promise<string> {
   try {
-    logOperation('extract-text-image', 'Starting image OCR', { fileUrl });
+    logOperation('extract-text-image', 'Starting image text extraction', { fileUrl });
 
     const client = new Mistral({
       apiKey: process.env.MISTRAL_API_KEY
     });
 
-    logOperation('extract-text-image', 'Processing image with Mistral OCR', {
+    logOperation('extract-text-image', 'Processing image with Mistral Vision API', {
       fileUrl,
-      model: "mistral-ocr-latest"
-    });
-    const ocrResponse = await client.ocr.process({
-      model: "mistral-ocr-latest",
-      document: {
-        type: "image_url",
-        imageUrl: fileUrl,
-      },
-      includeImageBase64: true
+      model: "pixtral-12b"
     });
 
-    const extractedText = ocrResponse.documentAnnotation || '';
-    logOperation('extract-text-image', 'Image OCR completed', {
+    const chatResponse = await client.chat.complete({
+      model: "pixtral-12b",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Please extract all the text from this image. Return only the text content without any additional commentary or formatting."
+            },
+            {
+              type: "image_url",
+              imageUrl: fileUrl,
+            },
+          ],
+        },
+      ],
+    });
+
+    const messageContent = chatResponse.choices[0]?.message?.content || '';
+
+    // Handle both string and ContentChunk[] responses
+    const extractedText = typeof messageContent === 'string'
+      ? messageContent
+      : messageContent.map(chunk => chunk.type === 'text' ? chunk.text : '').join('');
+
+    logOperation('extract-text-image', 'Image text extraction completed', {
       fileUrl,
       textLength: extractedText.length
     });
 
     return extractedText;
   } catch (error) {
-    logOperation('extract-text-image', 'Image OCR failed', {
+    logOperation('extract-text-image', 'Image text extraction failed', {
       fileUrl,
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -271,18 +288,22 @@ INSTRUCTIONS:
   }
 
   prompt += `\n\nReturn the CSV data starting with the header row:`;
+  prompt += `\n\nYou must wrap the csv in \`\`\`csv \n \`\`\``;
 
   try {
+    const model = process.env.MODEL || 'mistral-medium-latest'
     logOperation('text-to-csv', 'Calling Mistral LLM for CSV generation', {
-      model: 'mistral-large-latest',
+      model: model,
       promptLength: prompt.length
     });
 
-    const { text } = await generateText({
-      model: mistral('mistral-large-latest'),
+    let { text } = await generateText({
+      model: mistral(model),
       prompt,
       maxTokens: 4000,
     });
+
+    text = stripCsvWrapperRobust(text)
 
     logOperation('text-to-csv', 'CSV generation completed', {
       outputLength: text.trim().length
@@ -295,6 +316,47 @@ INSTRUCTIONS:
     });
     throw new Error(`Failed to convert text to CSV: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+}
+
+function stripCsvWrapper(input: string): string {
+  // Remove leading and trailing whitespace
+  const trimmed = input.trim();
+
+  // Check if it starts with ```csv and ends with ```
+  if (trimmed.startsWith('```csv') && trimmed.endsWith('```')) {
+    // Remove the opening ```csv and closing ```
+    let result = trimmed.slice(6); // Remove '```csv'
+    result = result.slice(0, -3); // Remove closing '```'
+
+    // Remove any leading/trailing whitespace or newlines
+    return result.trim();
+  }
+
+  // If no wrapper found, return the original string
+  return input;
+}
+
+// Alternative more robust version that handles various markdown code block formats
+function stripCsvWrapperRobust(input: string): string {
+  const trimmed = input.trim();
+
+  // Match various CSV code block patterns
+  const patterns = [
+    /^```csv\s*\n([\s\S]*?)\n```$/,  // ```csv\n...\n```
+    /^```csv\s*([\s\S]*?)```$/,      // ```csv...```
+    /^```\s*csv\s*\n([\s\S]*?)\n```$/,  // ``` csv\n...\n```
+    /^```\s*([\s\S]*?)\n```$/        // Generic ```...\n```
+  ];
+
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  // If no pattern matches, return original
+  return input;
 }
 
 /**

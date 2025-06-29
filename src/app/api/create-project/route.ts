@@ -30,8 +30,14 @@ export async function POST(req: NextRequest) {
 
     logOperation('create-project', 'Parsing request body')
     const body = await req.json()
-    const { name, fileUrl, type, columnNames, context, sheetId, spreadsheetUrl } = body
-    logOperation('create-project', `Request params: name=${name}, type=${type}, sheetId=${sheetId}, spreadsheetUrl=${spreadsheetUrl}`)
+    const { name, fileUrls, type, columnNames, context, sheetId, spreadsheetUrl } = body
+    logOperation('create-project', `Request params: name=${name}, type=${type}, sheetId=${sheetId}, spreadsheetUrl=${spreadsheetUrl}, fileUrls count=${fileUrls?.length || 0}`)
+
+    // Validate fileUrls
+    if (!fileUrls || !Array.isArray(fileUrls) || fileUrls.length === 0) {
+      logOperation('create-project', 'Invalid fileUrls provided')
+      return NextResponse.json({ error: 'At least one file URL is required' }, { status: 400 })
+    }
 
     // Get user from database
     logOperation('create-project', `Looking up user with clerkId=${userId}`)
@@ -88,7 +94,7 @@ export async function POST(req: NextRequest) {
       data: {
         name,
         userId: user.id,
-        fileUrls: [fileUrl],
+        fileUrls: fileUrls,
         status: 'PROCESSING',
       }
     })
@@ -147,7 +153,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         projectId: project.id,
-        fileUrl,
+        fileUrls,
         columnNames,
         context,
       })

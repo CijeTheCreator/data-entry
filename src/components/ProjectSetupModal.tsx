@@ -1,25 +1,39 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, RefreshCw, Plus, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { X, RefreshCw, Plus, Check, AlertCircle, Loader2, Upload, FileText, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
+interface FileData {
+  url: string
+  name: string
+}
+
 interface ProjectSetupModalProps {
-  fileUrl: string
-  fileName: string
+  fileUrl?: string
+  fileName?: string
+  initialFiles?: FileData[]
   onClose: () => void
   onContinue: (data: any) => void
 }
 
-export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContinue }: ProjectSetupModalProps) {
+export default function ProjectSetupModal({
+  fileUrl,
+  fileName,
+  initialFiles = [],
+  onClose,
+  onContinue
+}: ProjectSetupModalProps) {
   const [projectName, setProjectName] = useState('')
   const [activeTab, setActiveTab] = useState<'scratch' | 'existing'>('scratch')
   const [columnNames, setColumnNames] = useState<string[]>([])
   const [context, setContext] = useState('')
   const [spreadsheetUrl, setSpreadsheetUrl] = useState('')
   const [newColumn, setNewColumn] = useState('')
+  const [files, setFiles] = useState<FileData[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isUploadingFile, setIsUploadingFile] = useState(false)
   const [accessStatus, setAccessStatus] = useState<{
     checking: boolean
     verified: boolean
@@ -35,7 +49,27 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
 
   useEffect(() => {
     generateProjectName()
-  }, [])
+  }, []) // Empty dependency array to run only once
+
+  useEffect(() => {
+    // Initialize files from props
+    const initialFileList: FileData[] = []
+
+    // Add files from initialFiles prop
+    if (initialFiles.length > 0) {
+      initialFileList.push(...initialFiles)
+    }
+
+    // Add single file from legacy props if provided and not already in initialFiles
+    if (fileUrl && fileName) {
+      const existingFile = initialFileList.find(f => f.url === fileUrl)
+      if (!existingFile) {
+        initialFileList.push({ url: fileUrl, name: fileName })
+      }
+    }
+
+    setFiles(initialFileList)
+  }, [fileUrl, fileName, initialFiles])
 
   const generateProjectName = async () => {
     try {
@@ -46,6 +80,57 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
       console.error('Failed to generate project name:', error)
       setProjectName('New Project')
     }
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files
+    if (!selectedFiles || selectedFiles.length === 0) return
+
+    setIsUploadingFile(true)
+
+    try {
+      for (const file of Array.from(selectedFiles)) {
+        // Check if file already exists
+        const existingFile = files.find(f => f.name === file.name)
+        if (existingFile) {
+          toast.error(`File "${file.name}" is already added`)
+          continue
+        }
+
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`)
+        }
+
+        const data = await response.json()
+
+        setFiles(prevFiles => [...prevFiles, {
+          url: data.url,
+          name: file.name
+        }])
+
+        toast.success(`${file.name} uploaded successfully`)
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast.error('Failed to upload files. Please try again.')
+    } finally {
+      setIsUploadingFile(false)
+      // Reset the input
+      event.target.value = ''
+    }
+  }
+
+  const removeFile = (fileToRemove: FileData) => {
+    setFiles(files.filter(f => f.url !== fileToRemove.url))
+    toast.success('File removed')
   }
 
   const addColumn = () => {
@@ -104,6 +189,11 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
   }
 
   const handleContinue = async () => {
+    if (files.length === 0) {
+      toast.error('Please add at least one file')
+      return
+    }
+
     if (activeTab === 'existing' && !accessStatus.verified) {
       toast.error('Please verify access to the Google Sheet first')
       return
@@ -114,7 +204,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
     try {
       const data = {
         name: projectName,
-        fileUrl,
+        fileUrls: files.map(f => f.url),
         type: activeTab,
         ...(activeTab === 'scratch' ? {
           columnNames,
@@ -181,6 +271,72 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
               <RefreshCw className="w-5 h-5" />
             </button>
           </div>
+        </div>
+
+        {/* File Management */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Files ({files.length})
+          </label>
+
+          {/* File Upload */}
+          <div className="mb-4">
+            <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <div className="text-center">
+                {isUploadingFile ? (
+                  <div className="flex items-center space-x-2 text-blue-600">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Uploading...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2 text-gray-500">
+                    <Upload className="w-5 h-5" />
+                    <span>Click to upload files or drag and drop</span>
+                  </div>
+                )}
+              </div>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                onChange={handleFileUpload}
+                className="hidden"
+                disabled={isUploadingFile}
+              />
+            </label>
+          </div>
+
+          {/* File List */}
+          {files.length > 0 && (
+            <div className="space-y-2">
+              {files.map((file, index) => (
+                <div
+                  key={`${file.url}-${index}`}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    <FileText className="w-5 h-5 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700 truncate">
+                      {file.name}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => removeFile(file)}
+                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                    title="Remove file"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {files.length === 0 && (
+            <p className="text-sm text-gray-500 text-center py-4">
+              No files added yet. Upload files to get started.
+            </p>
+          )}
         </div>
 
         {/* Tabs */}
@@ -258,7 +414,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
               <textarea
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
-                placeholder="Provide additional context to help AI understand your document better..."
+                placeholder="Provide additional context to help AI understand your documents better..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
               />
             </div>
@@ -334,7 +490,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
               <textarea
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
-                placeholder="Provide additional context to help AI understand your document better..."
+                placeholder="Provide additional context to help AI understand your documents better..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
               />
             </div>
@@ -352,7 +508,7 @@ export default function ProjectSetupModal({ fileUrl, fileName, onClose, onContin
           </button>
           <button
             onClick={handleContinue}
-            disabled={isLoading}
+            disabled={isLoading || files.length === 0}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center space-x-2"
           >
             {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
