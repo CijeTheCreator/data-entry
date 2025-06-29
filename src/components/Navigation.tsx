@@ -42,15 +42,14 @@ export default function Navigation({ variant = 'default' }: NavigationProps) {
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ${
         isVisible ? 'translate-y-0' : '-translate-y-full'
       } flex items-center justify-between px-6 py-4 bg-surface border-b border-gray-200`}>
-        <Link href="/" className="flex items-center space-x-2 text-gray-800 hover:text-primary transition-colors">
+        <Link href="/" className="flex items-center text-gray-800 hover:text-primary transition-colors">
           <Image
             src="/EntrifyLogo.svg"
             alt="Entrify"
-            width={32}
-            height={32}
-            className="w-8 h-8"
+            width={120}
+            height={40}
+            className="h-8 w-auto"
           />
-          <span className="text-xl font-bold">Entrify</span>
         </Link>
 
         <div className="flex items-center space-x-6">
