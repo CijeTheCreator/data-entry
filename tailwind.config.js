@@ -6,7 +6,18 @@ module.exports = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        primary: '#000000',
+        secondary: '#333333',
+        background: '#faf9f5',
+        surface: '#ffffff',
+        muted: '#666666',
+      },
+      fontFamily: {
+        sans: ['Proxima Nova', 'system-ui', 'sans-serif'],
+      },
+    },
   },
   plugins: [],
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, RefreshCw, Plus, Check, AlertCircle, Loader2, Upload, FileText, Trash2 } from 'lucide-react'
+import { X, RefreshCw, Plus, Check, AlertCircle, Loader2, Upload, FileText, Trash2, Copy } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
@@ -47,20 +47,19 @@ export default function ProjectSetupModal({
   })
   const router = useRouter()
 
+  const serviceAccountEmail = 'entrify@the-worlds-largest-hackathon.iam.gserviceaccount.com'
+
   useEffect(() => {
     generateProjectName()
-  }, []) // Empty dependency array to run only once
+  }, [])
 
   useEffect(() => {
-    // Initialize files from props
     const initialFileList: FileData[] = []
 
-    // Add files from initialFiles prop
     if (initialFiles.length > 0) {
       initialFileList.push(...initialFiles)
     }
 
-    // Add single file from legacy props if provided and not already in initialFiles
     if (fileUrl && fileName) {
       const existingFile = initialFileList.find(f => f.url === fileUrl)
       if (!existingFile) {
@@ -90,7 +89,6 @@ export default function ProjectSetupModal({
 
     try {
       for (const file of Array.from(selectedFiles)) {
-        // Check if file already exists
         const existingFile = files.find(f => f.name === file.name)
         if (existingFile) {
           toast.error(`File "${file.name}" is already added`)
@@ -100,7 +98,7 @@ export default function ProjectSetupModal({
         const formData = new FormData()
         formData.append('file', file)
 
-        const response = await fetch('/api/upload', {
+        const response = await fetch('/api/upload-file', {
           method: 'POST',
           body: formData
         })
@@ -123,7 +121,6 @@ export default function ProjectSetupModal({
       toast.error('Failed to upload files. Please try again.')
     } finally {
       setIsUploadingFile(false)
-      // Reset the input
       event.target.value = ''
     }
   }
@@ -142,6 +139,11 @@ export default function ProjectSetupModal({
 
   const removeColumn = (column: string) => {
     setColumnNames(columnNames.filter(c => c !== column))
+  }
+
+  const copyServiceAccount = () => {
+    navigator.clipboard.writeText(serviceAccountEmail)
+    toast.success('Service account email copied to clipboard!')
   }
 
   const checkSpreadsheetAccess = async () => {
@@ -240,7 +242,7 @@ export default function ProjectSetupModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Set up your project</h2>
           <button
@@ -261,11 +263,11 @@ export default function ProjectSetupModal({
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
             <button
               onClick={generateProjectName}
-              className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
+              className="p-2 text-gray-500 hover:text-primary transition-colors"
               title="Generate new name"
             >
               <RefreshCw className="w-5 h-5" />
@@ -279,12 +281,11 @@ export default function ProjectSetupModal({
             Files ({files.length})
           </label>
 
-          {/* File Upload */}
           <div className="mb-4">
             <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
               <div className="text-center">
                 {isUploadingFile ? (
-                  <div className="flex items-center space-x-2 text-blue-600">
+                  <div className="flex items-center space-x-2 text-primary">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Uploading...</span>
                   </div>
@@ -306,7 +307,6 @@ export default function ProjectSetupModal({
             </label>
           </div>
 
-          {/* File List */}
           {files.length > 0 && (
             <div className="space-y-2">
               {files.map((file, index) => (
@@ -345,7 +345,7 @@ export default function ProjectSetupModal({
             <button
               onClick={() => setActiveTab('scratch')}
               className={`px-4 py-2 font-medium transition-colors border-b-2 ${activeTab === 'scratch'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
@@ -354,7 +354,7 @@ export default function ProjectSetupModal({
             <button
               onClick={() => setActiveTab('existing')}
               className={`px-4 py-2 font-medium transition-colors border-b-2 ${activeTab === 'existing'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
@@ -377,11 +377,11 @@ export default function ProjectSetupModal({
                   onChange={(e) => setNewColumn(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && addColumn()}
                   placeholder="Enter column name"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
                 <button
                   onClick={addColumn}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -390,12 +390,12 @@ export default function ProjectSetupModal({
                 {columnNames.map((column) => (
                   <span
                     key={column}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center space-x-1"
+                    className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm flex items-center space-x-1"
                   >
                     <span>{column}</span>
                     <button
                       onClick={() => removeColumn(column)}
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-gray-600 hover:text-gray-800"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -415,7 +415,7 @@ export default function ProjectSetupModal({
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 placeholder="Provide additional context to help AI understand your documents better..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent h-24 resize-none"
               />
             </div>
           </div>
@@ -435,7 +435,7 @@ export default function ProjectSetupModal({
                       setAccessStatus({ checking: false, verified: false, error: null })
                     }}
                     placeholder="https://docs.google.com/spreadsheets/d/..."
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                   {accessStatus.verified && (
                     <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-600" />
@@ -444,7 +444,7 @@ export default function ProjectSetupModal({
                 <button
                   onClick={checkSpreadsheetAccess}
                   disabled={accessStatus.checking || !spreadsheetUrl.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   {accessStatus.checking ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -454,6 +454,26 @@ export default function ProjectSetupModal({
                 </button>
               </div>
 
+              {/* Service Account Instructions */}
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700 mb-2">
+                  <strong>Share your Google Sheet with this service account:</strong>
+                </p>
+                <div className="flex items-center space-x-2 bg-blue-100 p-2 rounded font-mono text-sm">
+                  <span className="flex-1 text-blue-800">{serviceAccountEmail}</span>
+                  <button
+                    onClick={copyServiceAccount}
+                    className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                    title="Copy to clipboard"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-blue-600 mt-2">
+                  Give it "Editor" access, then click "Check Access" above.
+                </p>
+              </div>
+
               {accessStatus.error && (
                 <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                   <div className="flex items-start space-x-2">
@@ -461,11 +481,6 @@ export default function ProjectSetupModal({
                     <div className="text-sm text-red-700">
                       <p className="font-medium mb-1">Access Error</p>
                       <p>{accessStatus.error}</p>
-                      {accessStatus.serviceAccountEmail && (
-                        <p className="mt-2 font-mono text-xs bg-red-100 p-2 rounded">
-                          Service Account: {accessStatus.serviceAccountEmail}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -491,7 +506,7 @@ export default function ProjectSetupModal({
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 placeholder="Provide additional context to help AI understand your documents better..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent h-24 resize-none"
               />
             </div>
           </div>
@@ -502,14 +517,14 @@ export default function ProjectSetupModal({
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
+            className="px-6 py-2 text-muted hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleContinue}
             disabled={isLoading || files.length === 0}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center space-x-2"
+            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors font-medium disabled:opacity-50 flex items-center space-x-2"
           >
             {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
             <span>Continue</span>

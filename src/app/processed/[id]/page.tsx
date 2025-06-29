@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Image from 'next/image'
-import { CheckCircle, FileText, Headphones, Undo2, Redo2, Download, ChevronDown, X, Mail, Save, Upload, Loader2 } from 'lucide-react'
+import { CheckCircle, FileText, Download, ChevronDown, X, Upload, Loader2, ExternalLink } from 'lucide-react'
 import { useUser } from '@clerk/nextjs'
 import { toast } from 'react-hot-toast'
 import Navigation from '@/components/Navigation'
@@ -18,7 +18,7 @@ interface Project {
   updatedAt: string
   screenshotUrl: string
   connectedSheet?: {
-    sheetUrl: string
+    spreadsheetUrl: string
     lastSync: string
   }
   currentVersion: number
@@ -30,12 +30,12 @@ export default function ProcessedPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showTextModal, setShowTextModal] = useState(false)
-  const [showAudioModal, setShowAudioModal] = useState(false)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [textAnalysis, setTextAnalysis] = useState('')
-  const [audioUrl, setAudioUrl] = useState('')
   const [isLoadingText, setIsLoadingText] = useState(false)
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isLoaded && isSignedIn && params.id) {
@@ -54,8 +54,6 @@ export default function ProcessedPage() {
       } else if (response.status === 404) {
         toast.error('Project not found')
       }
-
-      console.log("Project: ", project)
     } catch (error) {
       console.error('Failed to fetch project:', error)
       toast.error('Failed to load project')
@@ -89,34 +87,64 @@ export default function ProcessedPage() {
     }
   }
 
-  const handleAudioAnalysis = async () => {
-    setShowAudioModal(true)
-    setIsLoadingAudio(true)
-
-    try {
-      const response = await fetch('/api/generate-audio-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: params.id })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setAudioUrl(data.audioUrl)
-      } else {
-        throw new Error('Failed to generate audio analysis')
-      }
-    } catch (error) {
-      console.error('Audio analysis error:', error)
-      toast.error('Failed to generate audio analysis')
-    } finally {
-      setIsLoadingAudio(false)
-    }
-  }
-
   const handleDownload = (format: string) => {
     window.open(`/api/download/${params.id}/${format}`, '_blank')
     setShowDownloadMenu(false)
+  }
+
+  const handleAdditionalFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files
+    if (!selectedFiles || selectedFiles.length === 0) return
+
+    setIsUploadingFiles(true)
+    setIsSyncing(true)
+
+    try {
+      const uploadPromises = Array.from(selectedFiles).map(async (file) => {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('/api/upload-file', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`)
+        }
+
+        return response.json()
+      })
+
+      const uploadResults = await Promise.all(uploadPromises)
+      const fileUrls = uploadResults.map(result => result.url)
+
+      // Process additional files
+      const processResponse = await fetch('/api/additional-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: params.id,
+          fileUrls
+        })
+      })
+
+      if (!processResponse.ok) {
+        throw new Error('Failed to process additional files')
+      }
+
+      toast.success('Additional files processed successfully!')
+      await fetchProject() // Refresh project data
+    } catch (error) {
+      console.error('Additional files error:', error)
+      toast.error('Failed to process additional files')
+    } finally {
+      setIsUploadingFiles(false)
+      setIsSyncing(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
   }
 
   const formatTimeAgo = (dateString: string) => {
@@ -132,11 +160,11 @@ export default function ProcessedPage() {
 
   if (!isLoaded || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <Navigation />
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-24">
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         </div>
       </div>
@@ -145,13 +173,13 @@ export default function ProcessedPage() {
 
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <Navigation />
-        <div className="max-w-4xl mx-auto px-6 py-20 text-center">
+        <div className="max-w-4xl mx-auto px-6 py-20 pt-32 text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-6">
             Sign in to view this project
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-muted">
             You need to be signed in to access project details.
           </p>
         </div>
@@ -161,47 +189,39 @@ export default function ProcessedPage() {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <Navigation />
-        <div className="max-w-4xl mx-auto px-6 py-20 text-center">
+        <div className="max-w-4xl mx-auto px-6 py-20 pt-32 text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-6">
             Project not found
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-muted">
             The project you're looking for doesn't exist or you don't have access to it.
           </p>
         </div>
       </div>
     )
   }
-  console.log("Project: ", project)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <Navigation />
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 pt-24">
         {/* Header Actions */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-2">
             <CheckCircle className="w-6 h-6 text-green-600" />
             <span className="text-lg font-medium text-gray-800">
-              {project.connectedSheet ? 'Synced with Google Sheets' : 'Processing Complete'}
+              {isSyncing ? 'Syncing...' : project.connectedSheet ? 'Synced with Google Sheets' : 'Processing Complete'}
             </span>
           </div>
 
           <div className="flex items-center space-x-4">
-            <button className="p-2 text-gray-500 hover:text-gray-700 transition-colors" title="Undo">
-              <Undo2 className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-gray-500 hover:text-gray-700 transition-colors" title="Redo">
-              <Redo2 className="w-5 h-5" />
-            </button>
-
             <div className="relative">
               <button
                 onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center space-x-2"
+                className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-secondary transition-colors font-medium inline-flex items-center space-x-2"
               >
                 <Download className="w-4 h-4" />
                 <span>Download</span>
@@ -209,7 +229,7 @@ export default function ProcessedPage() {
               </button>
 
               {showDownloadMenu && (
-                <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
+                <div className="absolute right-0 mt-2 w-40 bg-surface rounded-lg shadow-lg border border-gray-200 py-2 z-10">
                   <button
                     onClick={() => handleDownload('csv')}
                     className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
@@ -237,16 +257,26 @@ export default function ProcessedPage() {
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Document Preview */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="aspect-video bg-gray-100">
-              {project.fileUrls[project.fileUrls.length - 1] ? (
-                <Image
-                  src={project.screenshotUrl || project.fileUrls[project.fileUrls.length - 1]}
-                  alt="Processed document"
-                  width={800}
-                  height={450}
-                  className="w-full h-full object-cover"
-                />
+          <div className="bg-surface rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="aspect-video bg-gray-100 relative group">
+              {project.screenshotUrl ? (
+                <a
+                  href={project.connectedSheet?.spreadsheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full h-full"
+                >
+                  <Image
+                    src={project.screenshotUrl}
+                    alt="Processed document"
+                    width={800}
+                    height={450}
+                    className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all flex items-center justify-center">
+                    <ExternalLink className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </a>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                   <FileText className="w-16 h-16" />
@@ -257,52 +287,79 @@ export default function ProcessedPage() {
 
           {/* Analysis Actions */}
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">Document Analysis</h3>
+            <div className="bg-surface rounded-2xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Document Options</h3>
 
               <div className="space-y-4">
                 <button
                   onClick={handleTextAnalysis}
-                  className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center justify-center space-x-3"
+                  className="w-full bg-primary text-white px-6 py-4 rounded-lg hover:bg-secondary transition-colors font-medium inline-flex items-center justify-center space-x-3"
                 >
                   <FileText className="w-5 h-5" />
-                  <span>Generate Text Analysis</span>
+                  <span>Analyse Data</span>
                 </button>
 
-                <button
-                  onClick={handleAudioAnalysis}
-                  className="w-full bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-colors font-medium inline-flex items-center justify-center space-x-3"
-                >
-                  <Headphones className="w-5 h-5" />
-                  <span>Generate Audio Analysis</span>
-                </button>
+                <div className="relative">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                    onChange={handleAdditionalFiles}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingFiles}
+                    className="w-full bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition-colors font-medium inline-flex items-center justify-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isUploadingFiles ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        <span>Upload Additional Files</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
-                <button className="w-full bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition-colors font-medium inline-flex items-center justify-center space-x-3">
-                  <Upload className="w-5 h-5" />
-                  <span>Upload Additional Files</span>
-                </button>
+                {project.connectedSheet && (
+                  <a
+                    href={project.connectedSheet.spreadsheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center justify-center space-x-3"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                    <span>Go to Spreadsheet</span>
+                  </a>
+                )}
               </div>
             </div>
 
             {/* Document Info */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-surface rounded-2xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Project Details</h3>
 
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Project Name:</span>
+                  <span className="text-muted">Project Name:</span>
                   <span className="font-medium">{project.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Processed:</span>
+                  <span className="text-muted">Processed:</span>
                   <span className="font-medium">{formatTimeAgo(project.updatedAt)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Status:</span>
+                  <span className="text-muted">Status:</span>
                   <span className="text-green-600 font-medium capitalize">{project.status.toLowerCase()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Data Points:</span>
+                  <span className="text-muted">Data Points:</span>
                   <span className="font-medium">{project.dataPoints} extracted</span>
                 </div>
               </div>
@@ -314,9 +371,9 @@ export default function ProcessedPage() {
       {/* Text Analysis Modal */}
       {showTextModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="bg-surface rounded-2xl p-8 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">Text Analysis</h2>
+              <h2 className="text-2xl font-bold text-gray-800">Data Analysis</h2>
               <button
                 onClick={() => setShowTextModal(false)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -327,98 +384,14 @@ export default function ProcessedPage() {
 
             {isLoadingText ? (
               <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Analyzing document content...</p>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted">Analyzing document content...</p>
               </div>
             ) : (
-              <div className="prose prose-blue max-w-none">
+              <div className="prose prose-gray max-w-none">
                 <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
                   {textAnalysis}
                 </div>
-              </div>
-            )}
-
-            {!isLoadingText && textAnalysis && (
-              <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
-                <button className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors inline-flex items-center space-x-2">
-                  <Mail className="w-4 h-4" />
-                  <span>Send via Email</span>
-                </button>
-                <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center space-x-2">
-                  <Save className="w-4 h-4" />
-                  <span>Save Analysis</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Audio Analysis Modal */}
-      {showAudioModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">Audio Analysis</h2>
-              <button
-                onClick={() => setShowAudioModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {isLoadingAudio ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Generating audio analysis...</p>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-8 mb-6">
-                  <div className="flex items-center justify-center space-x-4 text-white">
-                    <Headphones className="w-8 h-8" />
-                    <div className="text-left">
-                      <h3 className="text-lg font-semibold">Document Analysis Audio</h3>
-                      <p className="text-purple-100">Duration: 2:34</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <audio controls className="w-full" src={audioUrl}>
-                      Your browser does not support the audio element.
-                    </audio>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-center space-x-2 text-purple-100 text-sm">
-                    <div className="flex space-x-1">
-                      {[...Array(12)].map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-1 bg-white rounded-full ${i < 8 ? 'h-4 opacity-100' : 'h-2 opacity-50'
-                            }`}
-                        ></div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-gray-600 mb-4">
-                  AI-generated audio summary of your document analysis, highlighting key insights and data points.
-                </p>
-              </div>
-            )}
-
-            {!isLoadingAudio && audioUrl && (
-              <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
-                <button className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors inline-flex items-center space-x-2">
-                  <Mail className="w-4 h-4" />
-                  <span>Send via Email</span>
-                </button>
-                <button className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium inline-flex items-center space-x-2">
-                  <Save className="w-4 h-4" />
-                  <span>Save Audio</span>
-                </button>
               </div>
             )}
           </div>

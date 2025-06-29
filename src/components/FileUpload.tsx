@@ -17,7 +17,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('')
   const [uploadedFileName, setUploadedFileName] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { isSignedIn } = useUser()
+  const { isSignedIn, isLoaded } = useUser()
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -87,11 +87,13 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
     fileInputRef.current?.click()
   }
 
+  const isUserLoading = !isLoaded
+
   return (
     <>
       {/* Drag Overlay */}
       {isDragOver && (
-        <div className="fixed inset-0 bg-blue-600 bg-opacity-90 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-primary bg-opacity-90 z-50 flex items-center justify-center">
           <div className="text-center text-white">
             <div className="text-4xl font-bold mb-4">Drop file anywhere</div>
             <div className="text-lg opacity-80">Smart Document Processing</div>
@@ -108,10 +110,10 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
       {/* Loading Overlay */}
       {isUploading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-8 text-center">
-            <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <div className="bg-surface rounded-lg p-8 text-center">
+            <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
             <div className="text-lg font-medium">Processing your file...</div>
-            <div className="text-gray-600 mt-2">This may take a few moments</div>
+            <div className="text-muted mt-2">This may take a few moments</div>
           </div>
         </div>
       )}
@@ -134,14 +136,24 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
         <div className="text-center">
           <button
             onClick={openFileDialog}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium text-lg mb-4 transition-colors inline-flex items-center space-x-2"
+            disabled={isUserLoading}
+            className="bg-primary hover:bg-secondary text-white px-8 py-3 rounded-lg font-medium text-lg mb-4 transition-colors inline-flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Upload className="w-5 h-5" />
-            <span>Upload File</span>
+            {isUserLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Loading...</span>
+              </>
+            ) : (
+              <>
+                <Upload className="w-5 h-5" />
+                <span>Upload File</span>
+              </>
+            )}
           </button>
 
-          <div className="text-gray-600">
-            or drop a file, <button onClick={openFileDialog} className="text-blue-600 hover:underline">click here</button>
+          <div className="text-muted">
+            or drop a file, <button onClick={openFileDialog} className="text-primary hover:underline" disabled={isUserLoading}>click here</button>
           </div>
         </div>
       </div>

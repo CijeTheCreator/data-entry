@@ -57,11 +57,11 @@ export default function ProjectsPage() {
 
   if (!isLoaded || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <Navigation variant="projects" />
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-24">
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         </div>
       </div>
@@ -70,13 +70,13 @@ export default function ProjectsPage() {
 
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <Navigation variant="projects" />
-        <div className="max-w-4xl mx-auto px-6 py-20 text-center">
+        <div className="max-w-4xl mx-auto px-6 py-20 pt-32 text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-6">
             Sign in to see your catalog
           </h1>
-          <p className="text-lg text-gray-600 mb-8">
+          <p className="text-lg text-muted mb-8">
             Access all your processed documents and projects in one place.
           </p>
         </div>
@@ -85,19 +85,19 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <Navigation variant="projects" />
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 pt-24">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-            <p className="text-gray-600 mt-1">Your document processing projects</p>
+            <p className="text-muted mt-1">Your document processing projects</p>
           </div>
           <Link
             href="/"
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center space-x-2"
+            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-secondary transition-colors font-medium inline-flex items-center space-x-2"
           >
             <Plus className="w-5 h-5" />
             <span>Create</span>
@@ -111,7 +111,7 @@ export default function ProjectsPage() {
               <Link
                 key={project.id}
                 href={`/processed/${project.id}`}
-                className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 hover:border-blue-200"
+                className="group bg-surface rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 hover:border-gray-300"
               >
                 <div className="aspect-video overflow-hidden bg-gray-100">
                   {project.fileUrls[0] ? (
@@ -129,10 +129,10 @@ export default function ProjectsPage() {
                   )}
                 </div>
                 <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                  <h3 className="font-semibold text-gray-900 group-hover:text-primary transition-colors line-clamp-2">
                     {project.name}
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-muted mt-1">
                     Edited {formatTimeAgo(project.updatedAt)}
                   </p>
                 </div>
@@ -148,12 +148,12 @@ export default function ProjectsPage() {
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               No projects yet
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-muted mb-6">
               Create your first project to get started with document processing.
             </p>
             <Link
               href="/"
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center space-x-2"
+              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-secondary transition-colors font-medium inline-flex items-center space-x-2"
             >
               <Plus className="w-5 h-5" />
               <span>Create Project</span>
