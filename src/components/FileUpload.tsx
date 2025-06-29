@@ -6,16 +6,20 @@ import { useUser } from '@clerk/nextjs'
 import { toast } from 'react-hot-toast'
 import ProjectSetupModal from './ProjectSetupModal'
 
+interface FileData {
+  url: string
+  name: string
+}
+
 interface FileUploadProps {
-  onFileSelect?: (file: File) => void
+  onFileSelect?: (files: File[]) => void
 }
 
 export default function FileUpload({ onFileSelect }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [showSetupModal, setShowSetupModal] = useState(false)
-  const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('')
-  const [uploadedFileName, setUploadedFileName] = useState<string>('')
+  const [uploadedFiles, setUploadedFiles] = useState<FileData[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { isSignedIn, isLoaded } = useUser()
 
@@ -33,20 +37,20 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
     e.preventDefault()
     setIsDragOver(false)
 
-    const files = e.dataTransfer.files
+    const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) {
-      handleFileUpload(files[0])
+      handleFileUpload(files)
     }
   }
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files && files.length > 0) {
-      handleFileUpload(files[0])
+      handleFileUpload(Array.from(files))
     }
   }
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (files: File[]) => {
     if (!isSignedIn) {
       toast.error('Please sign in to upload files')
       return
@@ -55,26 +59,35 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
     setIsUploading(true)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
+      const uploadPromises = files.map(async (file) => {
+        const formData = new FormData()
+        formData.append('file', file)
 
-      const response = await fetch('/api/upload-file', {
-        method: 'POST',
-        body: formData,
+        const response = await fetch('/api/upload-file', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error(`Upload failed for ${file.name}`)
+        }
+
+        const data = await response.json()
+        return {
+          url: data.url,
+          name: file.name
+        }
       })
 
-      if (!response.ok) {
-        throw new Error('Upload failed')
-      }
-
-      const data = await response.json()
-      setUploadedFileUrl(data.url)
-      setUploadedFileName(data.filename)
+      const uploadResults = await Promise.all(uploadPromises)
+      setUploadedFiles(uploadResults)
       setShowSetupModal(true)
 
       if (onFileSelect) {
-        onFileSelect(file)
+        onFileSelect(files)
       }
+
+      toast.success(`${files.length} file${files.length > 1 ? 's' : ''} uploaded successfully`)
     } catch (error) {
       console.error('Upload error:', error)
       toast.error('Upload failed, please try again.')
@@ -95,7 +108,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
       {isDragOver && (
         <div className="fixed inset-0 bg-primary bg-opacity-90 z-50 flex items-center justify-center">
           <div className="text-center text-white">
-            <div className="text-4xl font-bold mb-4">Drop file anywhere</div>
+            <div className="text-4xl font-bold mb-4">Drop files anywhere</div>
             <div className="text-lg opacity-80">Smart Document Processing</div>
           </div>
 
@@ -112,7 +125,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
           <div className="bg-surface rounded-lg p-8 text-center">
             <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-            <div className="text-lg font-medium">Processing your file...</div>
+            <div className="text-lg font-medium">Processing your files...</div>
             <div className="text-muted mt-2">This may take a few moments</div>
           </div>
         </div>
@@ -131,6 +144,7 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
           onChange={handleFileInput}
           className="hidden"
           accept="image/*,.pdf,.zip,.doc,.docx,audio/*"
+          multiple
         />
 
         <div className="text-center">
@@ -147,25 +161,28 @@ export default function FileUpload({ onFileSelect }: FileUploadProps) {
             ) : (
               <>
                 <Upload className="w-5 h-5" />
-                <span>Upload File</span>
+                <span>Upload Files</span>
               </>
             )}
           </button>
 
           <div className="text-muted">
-            or drop a file, <button onClick={openFileDialog} className="text-primary hover:underline" disabled={isUserLoading}>click here</button>
+            or drop files, <button onClick={openFileDialog} className="text-primary hover:underline" disabled={isUserLoading}>click here</button>
           </div>
         </div>
       </div>
 
       {/* Project Setup Modal */}
-      {showSetupModal && uploadedFileUrl && (
+      {showSetupModal && uploadedFiles.length > 0 && (
         <ProjectSetupModal
-          fileUrl={uploadedFileUrl}
-          fileName={uploadedFileName}
-          onClose={() => setShowSetupModal(false)}
+          initialFiles={uploadedFiles}
+          onClose={() => {
+            setShowSetupModal(false)
+            setUploadedFiles([])
+          }}
           onContinue={(projectData) => {
             setShowSetupModal(false)
+            setUploadedFiles([])
             // Navigation will be handled by the modal
           }}
         />
