@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { Webhook } from 'svix'
 import { prisma } from '../../../../../lib/prisma'
 import { logOperation, logError } from '../../../../../lib/utils'
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
   if (eventType === 'user.created') {
     logOperation('clerk-webhook', `Processing user.created event for user ${evt.data.id}`)
-    
+
     try {
       await prisma.user.create({
         data: {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
           name: `${evt.data.first_name || ''} ${evt.data.last_name || ''}`.trim() || null,
         },
       })
-      
+
       logOperation('clerk-webhook', `Successfully created user ${evt.data.id}`)
     } catch (error) {
       logError('clerk-webhook', error, { clerkId: evt.data.id })

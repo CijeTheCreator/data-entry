@@ -1,5 +1,4 @@
 import { google } from 'googleapis'
-import { prisma } from './prisma'
 
 // Initialize Google Sheets client with service account
 function getGoogleSheetsClient() {

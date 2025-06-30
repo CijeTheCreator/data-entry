@@ -10,13 +10,5 @@ export function logOperation(operation: string, message: string, metadata?: any)
 
 export function logError(operation: string, error: any, metadata?: any) {
   console.error(`[${operation}] Error:`, error)
-  
-  // Store in database
-  prisma.errorLog.create({
-    data: {
-      operation,
-      error: error.message || String(error),
-      metadata: metadata || null,
-    },
-  }).catch(console.error)
+
 }

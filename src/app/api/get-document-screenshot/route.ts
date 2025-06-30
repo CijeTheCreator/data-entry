@@ -5,12 +5,6 @@ import { logOperation, logError } from '../../../../lib/utils'
 
 export async function POST(req: NextRequest) {
 
-  return NextResponse.json({
-    success: true,
-    screenshotUrl: "https://twlh-files-bucket.s3.eu-north-1.amazonaws.com/screenshots/user_2z5BoKyMEKn5GQiXMiwd7QgTJKv/cmcg02k9h00016r0v61g42ilq/1751100586471-sheet-screenshot.png",
-    message: 'Screenshot captured and saved successfully'
-  })
-
   try {
     logOperation('get-document-screenshot', 'Starting screenshot capture')
 

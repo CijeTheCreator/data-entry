@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma'
 import { extractAndProcessDocuments } from '../../../../lib/extract-document-helpers';
-import { logOperation, logError } from '../../../../lib/utils'
+import { logOperation } from '../../../../lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
